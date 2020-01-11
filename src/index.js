@@ -1,20 +1,22 @@
-import React from 'react'
+import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import debounce from 'lodash.debounce'
 import throttle from 'lodash.throttle'
 
-import Cell from './Cell'
-import GroupHeading from './GroupHeading'
+import Tile from './components/Tile/Tile'
+import GroupHeader from './components/GroupHeader/GroupHeader'
 import calcRenderableItems from './calcRenderableItems'
 import computeLayout from './computeLayout'
 import computeLayoutGroups from './computeLayoutGroups'
 import getUrl from './utils/getUrl'
 import sortByDate from './utils/sortByDate'
 import groupByDate from './utils/groupByDate'
+import getScrollSpeed from './utils/getScrollSpeed'
 
 import styles from './styles.css'
 
-export default class Pig extends React.Component {
+
+export default class Pig extends Component {
   constructor(props) {
     super(props)
 
@@ -29,21 +31,25 @@ export default class Pig extends React.Component {
     if (props.sortFunc) this.imageData.sort(props.sortFunc)
     else if (props.sortByDate) this.imageData = sortByDate(this.imageData)
 
-    // do grouping
+    // check grouping ability
     if (props.groupByDate) {
+      if (!this.imageData[0].items) {
+        console.error(`Data provided is not grouped yet. Please check the docs, you'll need to use groupify.js`)
+      }
+    } else {
       if (this.imageData[0].items) {
-        console.warn('Data appears to be grouped already')
-      } else {
-        this.imageData = groupByDate(this.imageData)
+        console.error(`Data provided is grouped, please include the groupByDate prop`)
       }
     }
 
     this.state = {
       renderedItems: [],
-      activeCellUrl: null
+      scrollSpeed: 'slow',
+      activeTileUrl: null
     }
 
-    this.windowHeight = window.innerHeight,
+    this.scrollThrottleMs = 300
+    this.windowHeight = typeof window !== 'undefined' ? window.innerHeight : 1000, // arbitrary height
     this.containerOffsetTop = null
     this.totalHeight = 0
 
@@ -51,24 +57,25 @@ export default class Pig extends React.Component {
     this.titleRef = React.createRef()
     this.minAspectRatio = null
     this.latestYOffset = 0
+    this.previousYOffset = 0
     this.scrollDirection = 'down'
 
     this.settings = {
-      gridGap: props.gridGap || 8,
-      bgColor: props.bgColor || '#fff',
-      primaryImageBufferHeight: props.primaryImageBufferHeight || 2500,
-      secondaryImageBufferHeight: props.secondaryImageBufferHeight || 100,
-      expandedSize: props.expandedSize || 1000,
-      thumbnailSize: props.thumbnailSize || 10, // Height in px. Keeping it low seeing as it gets blurred anyway with a css filter
-
-      // settings specific to groups
-      groupByDate: props.groupByDate || false,
-      breakpoint: props.breakpoint || 800,
-      groupGapSm: props.groupGapSm || 50,
-      groupGapLg: props.groupGapLg || 50,
+      gridGap: props.gridGap,
+      bgColor: props.bgColor,
+      primaryImageBufferHeight: props.primaryImageBufferHeight,
+      secondaryImageBufferHeight: props.secondaryImageBufferHeight,
+      expandedSize: props.expandedSize,
+      thumbnailSize: props.thumbnailSize,
+      groupByDate: props.groupByDate,
+      breakpoint: props.breakpoint,
+      groupGapSm: props.groupGapSm,
+      groupGapLg: props.groupGapLg,
     }
 
-    this.throttledScroll = throttle(this.onScroll, 200)
+    if (typeof window === 'undefined') return
+
+    this.throttledScroll = throttle(this.onScroll, this.scrollThrottleMs)
     this.debouncedResize = debounce(this.onResize, 500)
   }
 
@@ -89,15 +96,21 @@ export default class Pig extends React.Component {
   }
 
   onScroll = () => {
-    // Compute the scroll direction using the latestYOffset and the previousYOffset
     this.previousYOffset = this.latestYOffset || window.pageYOffset
     this.latestYOffset = window.pageYOffset
     this.scrollDirection = (this.latestYOffset > this.previousYOffset) ? 'down' : 'up'
 
     window.requestAnimationFrame(() => {
       this.setRenderedItems(this.imageData)
-      // dismiss any active cell
-      if (this.state.activeCellUrl) this.setState({ activeCellUrl: null })
+
+      // measure users scrolling speed and set it to state, used for conditional tile rendering
+      const scrollSpeed = getScrollSpeed(this.latestYOffset, this.scrollThrottleMs, scrollSpeed => {
+        this.setState({ scrollSpeed }) // scroll idle callback
+      })
+      this.setState({ scrollSpeed })
+      
+      // dismiss any active Tile
+      if (this.state.activeTileUrl) this.setState({ activeTileUrl: null })
     })
   }
 
@@ -147,11 +160,14 @@ export default class Pig extends React.Component {
     this.container = this.containerRef.current
     this.containerOffsetTop = this.container.offsetTop
     this.containerWidth = this.container.offsetWidth
-    window.addEventListener('scroll', this.throttledScroll)
-    window.addEventListener('resize', this.debouncedResize)
 
     this.imageData = this.getUpdatedImageLayout()
     this.setRenderedItems(this.imageData)
+
+    if (typeof window === 'undefined') return
+    window.addEventListener('scroll', this.throttledScroll)
+    window.addEventListener('resize', this.debouncedResize)
+
   }
 
   componentWillUnmount() {
@@ -159,9 +175,10 @@ export default class Pig extends React.Component {
     window.removeEventListener('resize', this.debouncedResize)
   }
 
-  renderCell = item => (
-    <Cell
+  renderTile = item => (
+    <Tile
       key={item.url}
+      useLqip={this.props.useLqip}
       windowHeight={this.windowHeight}
       containerWidth={this.containerWidth}
       containerOffsetTop={this.containerOffsetTop}
@@ -171,29 +188,30 @@ export default class Pig extends React.Component {
       handleClick={item => {
         // if an image is already the width of the container, don't expand it on click
         if (item.style.width >= this.containerWidth) {
-          this.setState({ activeCellUrl: null })
+          this.setState({ activeTileUrl: null })
           return
         }
 
         this.setState({
-          // if cell is already active, deactivate it
-          activeCellUrl: item.url !== this.state.activeCellUrl ? item.url : null
+          // if Tile is already active, deactivate it
+          activeTileUrl: item.url !== this.state.activeTileUrl ? item.url : null
         })
       }}
-      activeCellUrl={this.state.activeCellUrl}
+      activeTileUrl={this.state.activeTileUrl}
       settings={this.settings}
       thumbnailSize={this.props.thumbnailSize}
+      scrollSpeed={this.state.scrollSpeed}
     />
   )
 
   renderGroup = group => (
     <React.Fragment key={group.date}>
-      <GroupHeading settings={this.settings} group={group} activeCellUrl={this.state.activeCellUrl} />
-      {group.items.map(item => this.renderCell(item))}
+      <GroupHeader settings={this.settings} group={group} activeTileUrl={this.state.activeTileUrl} />
+      {group.items.map(item => this.renderTile(item))}
     </React.Fragment>
   )
 
-  renderFlat = item => this.renderCell(item)
+  renderFlat = item => this.renderTile(item)
 
   render() {
     return (
@@ -210,8 +228,24 @@ export default class Pig extends React.Component {
   }
 }
 
+Pig.defaultProps = {
+  useLqip: true,
+  primaryImageBufferHeight: 2500,
+  secondaryImageBufferHeight: 100,
+  expandedSize: 1000,
+  thumbnailSize: 20, // Height in px. Keeping it low seeing as it gets blurred anyway with a css filter
+  // settings specific to groups
+  groupByDate: false,
+  breakpoint: 800,
+  groupGapSm: 50,
+  groupGapLg: 50,
+  gridGap: 8,
+  bgColor: '#fff',
+}
+
 Pig.propTypes = {
   imageData: PropTypes.array.isRequired,
+  useLqip: PropTypes.bool,
   gridGap: PropTypes.number,
   getUrl: PropTypes.func,
   primaryImageBufferHeight: PropTypes.number,

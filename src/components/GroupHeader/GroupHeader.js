@@ -6,7 +6,7 @@ import styles from './styles.css'
 export default ({
   settings,
   group,
-  activeCellUrl,
+  activeTileUrl,
 }) => (
   <header
     className={styles.headerPositioner}
@@ -19,11 +19,11 @@ export default ({
       className={`${styles.headerInner} pig-header`}
       style={{
         backgroundColor: settings.bgColor,
-        zIndex: activeCellUrl ? 1 : 2,
+        zIndex: activeTileUrl ? 1 : 2,
       }}
     >
-      <span className={`${styles.description} pig-header_description`}>
-        {group.description}
+      <span className={`${styles.location} pig-header_location`}>
+        {group.location}
       </span>
       <span className={`${styles.date} pig-header_date`}>
         {group.date}
