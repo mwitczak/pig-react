@@ -22,11 +22,11 @@ export default ({
         zIndex: activeTileUrl ? 1 : 2,
       }}
     >
-      <span className={`${styles.location} pig-header_location`}>
+      {/*<span className={`${styles.location} pig-header_location`}>
         {group.location}
-      </span>
+      </span>*/}
       <span className={`${styles.date} pig-header_date`}>
-        {group.date}
+        {group.location}
       </span>
     </div>
   </header>

@@ -31,8 +31,13 @@ export default class Pig extends Component {
     if (props.sortFunc) this.imageData.sort(props.sortFunc)
     else if (props.sortByDate) this.imageData = sortByDate(this.imageData)
 
+    //if (props.groupByDate) this.imageData = groupByDate(this.imageData)
+    //console.log(this.imageData);
+
+    if (props.groupByFunc) this.imageData = props.groupByFunc(this.imageData)
+
     // check grouping ability
-    if (props.groupByDate) {
+    /*if (props.groupByDate) {
       if (!this.imageData[0].items) {
         console.error(`Data provided is not grouped yet. Please check the docs, you'll need to use groupify.js`)
       }
@@ -40,7 +45,7 @@ export default class Pig extends Component {
       if (this.imageData[0].items) {
         console.error(`Data provided is grouped, please include the groupByDate prop`)
       }
-    }
+    }*/
 
     this.state = {
       renderedItems: [],
@@ -51,7 +56,7 @@ export default class Pig extends Component {
     this.scrollThrottleMs = 300
     this.windowHeight = typeof window !== 'undefined' ? window.innerHeight : 1000, // arbitrary height
     this.containerOffsetTop = null
-    this.totalHeight = 0
+    this.totalHeight = 2000
 
     this.containerRef = React.createRef()
     this.titleRef = React.createRef()
@@ -108,7 +113,7 @@ export default class Pig extends Component {
         this.setState({ scrollSpeed }) // scroll idle callback
       })
       this.setState({ scrollSpeed })
-      
+
       // dismiss any active Tile
       if (this.state.activeTileUrl) this.setState({ activeTileUrl: null })
     })
@@ -256,6 +261,7 @@ Pig.propTypes = {
   groupGapLg: PropTypes.number,
   breakpoint: PropTypes.number,
   sortFunc: PropTypes.func,
+  groupByFunc: PropTypes.func,
   expandedSize: PropTypes.number,
   thumbnailSize: PropTypes.number,
 }
